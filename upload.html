@@ -1,0 +1,112 @@
+				<div class="file_box">
+					<input type='text' readonly="1" style="background: darkgrey" name='k[src]' id='k_src' class='file_box_txt' placeholder="选择上传文件" />
+					<input type='button' id="up_button"  class="file_box_btn" value='浏览' onclick="select_file()"/>
+                    <input style="width: 1px;opacity:0;" type="file" name="apk_file" id="apk_file" onchange="ajax_upload(this.files)" />
+                    <span style="color: red;"  id="check_wait">必须先填写版本,版本检查成功后才会出现上传button</span>
+				</div>
+function ajax_upload(files)
+{
+    window.xhr = $.ajaxSettings.xhr();
+
+    if(files == null){
+        return;
+    }
+
+    var file = files[0];
+    var file_name = encodeURIComponent(file.name);
+    var file_ext = file_name.split(".")[1];
+    var file_size = file.size;
+    var post_data = '&filename='+file_name+'&file_size='+file_size
+    var country = $('#k_country:checked').val();
+    install_kind = $("#k_install_kind").val();
+    shortCountry = country == 32 ? 'cn' : 'ov';
+
+    var pattern = /^\w[\w\-\.]*$/g;
+    if(!pattern.test(file_name)){
+        submit_failed_msg = '文件名称必须由半角状态的数字、字母、下划线、连字符(-)等组成,且以数字、字母、下划线等开头!';
+        alert(submit_failed_msg);
+        submit_ok = false;
+        return false;
+    }
+
+    if (!file_ext || !(/^(apk)$/.test(file_ext))){
+        submit_failed_msg = '文件类型错误!';
+        alert(submit_failed_msg);
+        submit_ok = false;
+        return false;
+    }
+
+    var appid = $('#k_appid').val();
+    if(appid == '')
+    {
+        submit_failed_msg = '请先选择该文件的所属产品';
+        alert(submit_failed_msg);
+        $('#k_appid').focus();
+        $("input[name='app']").val('');
+        submit_ok = false;
+        return false;
+    }else{
+        post_data += "&appid="+appid;
+    }
+
+    version = $('#k_version').val();
+    if(version == '')
+    {
+        submit_failed_msg = '请先填写文件的版本';
+        alert(submit_failed_msg);
+        $('#k_version').focus();
+        submit_ok = false;
+        return false;
+    }else{
+        post_data += "&version="+shortCountry  + '_' + version + '_'+ install_kind;
+    }
+
+    //侦查当前附件上传情况
+    xhr.upload.onprogress = function(evt) {
+        //上传进度
+        if(evt.loaded) {
+            var howmuch = Math.floor((evt.loaded / evt.total) * 100);
+            var process = "进度："+howmuch+'%';
+            $('#up_button').val(process);
+            $('#k_src').val(process);
+            $('#up_button').attr('disabled');
+        }else{
+            alert("Can't determine the size of the file.");
+        }
+
+    };
+
+    xhr.onreadystatechange = function(event){
+        //上传成功
+        if(event.target.readyState == 4 && event.target.status == 200)
+        {
+            var response = eval("("+event.target.responseText+")");
+            if(response.success == 1){
+                submit_ok = true;
+                $('#up_button').css({"width":"200px"}).removeAttr("disable").val('Upload Completed');
+                $("#k_src").val(kSrc + kAppName + '_' + shortCountry + '_' + version + '_'+ install_kind + '.apk');
+                $("input[name='app']").val('');
+            }else{
+                submit_ok = false;
+                if(response.err_code == 2){
+                    submit_failed_msg = "同名文件已存在,请修改文件名称后重新上传!";
+                    $('#up_button').removeAttr("disable").val('Upload').hide();
+                    $("#check_wait").html(submit_failed_msg).show();
+                    $("#k_src").val("");
+                    $("input[name='app']").val('');
+                    alert(submit_failed_msg);
+                }else{
+                    $('#up_button').removeAttr("disable").val('Upload').show();
+                    submit_failed_msg = response.msg;
+                    alert(submit_failed_msg);
+                }
+            }
+        }
+    };
+
+    var url = '?m=apps&c=packages&a=public_upload_apk'+post_data;
+    xhr.open('post', url, true);
+    xhr.setRequestHeader("Content-Type", "multipart/form-data;charset=UTF-8");
+    xhr.send(file);
+}
+
